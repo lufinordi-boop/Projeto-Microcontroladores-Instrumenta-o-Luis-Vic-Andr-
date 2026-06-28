@@ -1,0 +1,129 @@
+ignorem import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.metrics import r2_score, mean_absolute_error
+
+# Dados
+
+angulo = np.array([0,15,30,45,60,75,90,110,120,150])
+
+vout_med = np.array([
+    3.05,
+    3.045,
+    3.03,
+    3.00,
+    2.96,
+    2.95,
+    2.94,
+    2.925,
+    2.88,
+    2.69
+])
+
+vout_calc = np.array([
+    2.676399027,
+    2.646351243,
+    2.616970658,
+    2.588235294,
+    2.558139535,
+    2.608695652,
+    2.538461538,
+    2.538461538,
+    2.528735632,
+    2.477477477
+])
+
+# ==========================
+# MÉTRICAS
+# ==========================
+
+r2 = r2_score(vout_med, vout_calc)
+
+erro_abs = np.abs(vout_med - vout_calc)
+mae = mean_absolute_error(vout_med, vout_calc)
+
+erro_percentual = np.mean(
+    erro_abs / vout_med
+) * 100
+
+print(f'R² = {r2:.4f}')
+print(f'Erro médio absoluto = {mae:.4f} V')
+print(f'Erro percentual médio = {erro_percentual:.2f} %')
+
+# ==========================
+# RETA DE CALIBRAÇÃO
+# ==========================
+
+coef = np.polyfit(vout_calc, vout_med, 1)
+
+a = coef[0]
+b = coef[1]
+
+print('\nReta de calibração:')
+print(f'Vmed = {a:.4f}*Vcalc + {b:.4f}')
+
+# ==========================
+# GRÁFICO 1
+# ==========================
+
+plt.figure(figsize=(8,5))
+
+plt.plot(
+    angulo,
+    vout_med,
+    'o-',
+    label='Vout medido'
+)
+
+plt.plot(
+    angulo,
+    vout_calc,
+    's--',
+    label='Vout calculado'
+)
+
+plt.xlabel('Ângulo (°)')
+plt.ylabel('Tensão (V)')
+plt.title('Comparação entre Vout Medido e Calculado')
+plt.grid(True)
+plt.legend()
+
+plt.show()
+
+# ==========================
+# GRÁFICO 2
+# ==========================
+
+plt.figure(figsize=(6,6))
+
+plt.scatter(
+    vout_calc,
+    vout_med,
+    s=80
+)
+
+x = np.linspace(
+    min(vout_calc),
+    max(vout_calc),
+    100
+)
+
+plt.plot(
+    x,
+    a*x+b,
+    label='Calibração'
+)
+
+plt.plot(
+    x,
+    x,
+    '--',
+    label='Ideal (y=x)'
+)
+
+plt.xlabel('Vout calculado (V)')
+plt.ylabel('Vout medido (V)')
+plt.title(f'Correlação (R²={r2:.4f})')
+plt.grid(True)
+plt.legend()
+
+plt.show()
