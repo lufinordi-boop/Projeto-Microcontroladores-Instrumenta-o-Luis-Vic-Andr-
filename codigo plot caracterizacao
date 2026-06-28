@@ -1,0 +1,130 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.metrics import r2_score
+
+# Dados experimentais
+angulo = np.array([0, 15, 30, 45, 60, 75, 90, 110, 120, 150])
+
+tensao = np.array([
+    3.05,
+    3.045,
+    3.03,
+    3.00,
+    2.96,
+    2.95,
+    2.94,
+    2.925,
+    2.88,
+    2.69
+])
+
+# ==========================
+# AJUSTE LINEAR
+# ==========================
+
+coef_lin = np.polyfit(angulo, tensao, 1)
+y_lin = np.polyval(coef_lin, angulo)
+r2_lin = r2_score(tensao, y_lin)
+
+# ==========================
+# AJUSTE QUADRÁTICO
+# ==========================
+
+coef_quad = np.polyfit(angulo, tensao, 2)
+y_quad = np.polyval(coef_quad, angulo)
+r2_quad = r2_score(tensao, y_quad)
+
+# ==========================
+# AJUSTE LOGARÍTMICO
+# y = a*ln(x+1)+b
+# ==========================
+
+x_log = angulo + 1  # evita ln(0)
+
+coef_log = np.polyfit(np.log(x_log), tensao, 1)
+
+a_log = coef_log[0]
+b_log = coef_log[1]
+
+y_log = a_log*np.log(x_log) + b_log
+
+r2_log = r2_score(tensao, y_log)
+
+# ==========================
+# RESULTADOS
+# ==========================
+
+print("\n==============================")
+print("MODELO LINEAR")
+print("==============================")
+print(f"V = {coef_lin[0]:.8f}θ + {coef_lin[1]:.8f}")
+print(f"R² = {r2_lin:.6f}")
+
+print("\n==============================")
+print("MODELO QUADRÁTICO")
+print("==============================")
+print(f"V = {coef_quad[0]:.10f}θ² + "
+      f"{coef_quad[1]:.8f}θ + "
+      f"{coef_quad[2]:.8f}")
+print(f"R² = {r2_quad:.6f}")
+
+print("\n==============================")
+print("MODELO LOGARÍTMICO")
+print("==============================")
+print(f"V = {a_log:.8f}·ln(θ+1) + {b_log:.8f}")
+print(f"R² = {r2_log:.6f}")
+
+# ==========================
+# MELHOR MODELO
+# ==========================
+
+r2s = [r2_lin, r2_quad, r2_log]
+nomes = ["Linear", "Quadrático", "Logarítmico"]
+
+idx = np.argmax(r2s)
+
+print("\n==============================")
+print(f"MELHOR AJUSTE: {nomes[idx]}")
+print(f"R² = {r2s[idx]:.6f}")
+print("==============================")
+
+# ==========================
+# GRÁFICO
+# ==========================
+
+x = np.linspace(0, 150, 500)
+
+plt.figure(figsize=(10,6))
+
+plt.scatter(
+    angulo,
+    tensao,
+    color='black',
+    s=60,
+    label='Dados experimentais'
+)
+
+plt.plot(
+    x,
+    np.polyval(coef_lin, x),
+    label=f'Linear (R²={r2_lin:.4f})'
+)
+
+plt.plot(
+    x,
+    np.polyval(coef_quad, x),
+    label=f'Quadrático (R²={r2_quad:.4f})'
+)
+
+plt.plot(
+    x,
+    a_log*np.log(x+1)+b_log,
+    label=f'Logarítmico (R²={r2_log:.4f})'
+)
+
+plt.xlabel('Ângulo (°)')
+plt.ylabel('Tensão (V)')
+plt.title('Curva Característica do Flex Sensor')
+plt.grid(True)
+plt.legend()
+plt.show()
