@@ -1,0 +1,157 @@
+#include <stdio.h>
+#include "pico/stdlib.h"
+#include "hardware/adc.h"
+#include "hardware/i2c.h"
+#include "hardware/pwm.h"
+#include "lcd_i2c.h"
+
+#define SERVO_PIN 15
+#define NUM_PONTOS 10
+
+// Função auxiliar para mapeamento linear (equivalente ao map() do Arduino)
+long map(long x, long in_min, long in_max, long out_min, long out_max) {
+    return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+// Função auxiliar para limitar os valores dentro de uma faixa segura
+long constrain(long val, long min_val, long max_val) {
+    if (val < min_val) return min_val;
+    if (val > max_val) return max_val;
+    return val;
+}
+
+// Lógica contínua para o servo motor (0° a 90°)
+void servo_set_angle(int angle)
+{
+    uint slice_num = pwm_gpio_to_slice_num(SERVO_PIN);
+    
+    // Garante que o servo opere estritamente dentro da faixa segura de 0 a 90 graus
+    angle = constrain(angle, 0, 90);
+
+    // Mapeia proporcionalmente: ângulo de 0° a 90° vira pulso de PWM de 500 a 1500
+    uint16_t pulse = map(angle, 0, 90, 500, 1500);
+
+    pwm_set_chan_level(slice_num, PWM_CHAN_B, pulse);
+}
+
+int main()
+{
+    stdio_init_all();
+
+    // ==========================================
+    // INICIALIZAÇÃO DO LCD I2C
+    // ==========================================
+    i2c_init(i2c0, 100000);
+
+    gpio_set_function(4, GPIO_FUNC_I2C);
+    gpio_set_function(5, GPIO_FUNC_I2C);
+
+    gpio_pull_up(4);
+    gpio_pull_up(5);
+
+    lcd_init();
+
+    // ==========================================
+    // INICIALIZAÇÃO DO ADC (FLEX SENSOR)
+    // ==========================================
+    adc_init();
+    adc_gpio_init(26);
+    adc_select_input(0); // Canal 0 corresponde à GPIO 26
+
+    // ==========================================
+    // INICIALIZAÇÃO DO PWM (SERVO MOTOR)
+    // ==========================================
+    gpio_set_function(SERVO_PIN, GPIO_FUNC_PWM);
+
+    uint slice_num = pwm_gpio_to_slice_num(SERVO_PIN);
+
+    pwm_config config = pwm_get_default_config();
+
+    // Clock PWM: 125 MHz / 125 = 1 MHz
+    pwm_config_set_clkdiv(&config, 125.0f);
+
+    // Período de 20 ms (50 Hz)
+    pwm_config_set_wrap(&config, 20000);
+
+    pwm_init(slice_num, &config, true);
+
+    // Mensagem inicial no display
+    lcd_clear();
+    lcd_set_cursor(0,0);
+    lcd_string("Garra Multi-Ponto");
+    sleep_ms(1500);
+    lcd_clear();
+
+    // Vetores globais de calibração baseados na sua tabela prática
+    // Nota: O ADC está em ordem decrescente porque a leitura elétrica é invertida
+    int tabela_adc[NUM_PONTOS]    = {3785, 3779, 3758, 3723, 3672, 3661, 3648, 3630, 3573, 3339};
+    int tabela_graus[NUM_PONTOS]  = {   0,   15,   30,   45,   60,   75,   90,  110,  120,  150};
+
+    while(true)
+    {
+        // Lê o valor atualizado do ADC na GPIO 26
+        uint16_t adc_value = adc_read();
+
+        int angulo_sensor = 0;
+
+        // =================================================================
+        // ALGORITMO DE INTERPOLAÇÃO POR PARTES (CURVA REAL DO SENSOR)
+        // =================================================================
+        if (adc_value >= tabela_adc[0]) {
+            // Se o ADC for maior ou igual ao limite de 0° (ex: 3790 devido a ruído)
+            angulo_sensor = tabela_graus[0]; 
+        } 
+        else if (adc_value <= tabela_adc[NUM_PONTOS - 1]) {
+            // Se o ADC for menor ou igual ao limite de 150° (ex: 3330)
+            angulo_sensor = tabela_graus[NUM_PONTOS - 1]; 
+        } 
+        else {
+            // Varre os intervalos da tabela para fazer a aproximação local precisa
+            for (int i = 0; i < NUM_PONTOS - 1; i++) {
+                if (adc_value <= tabela_adc[i] && adc_value > tabela_adc[i+1]) {
+                    // Interpola linearmente apenas dentro do subintervalo detectado
+                    angulo_sensor = map(adc_value, tabela_adc[i], tabela_adc[i+1], tabela_graus[i], tabela_graus[i+1]);
+                    break; 
+                }
+            }
+        }
+        // Garante por segurança que nenhuma aproximação saia da janela de 0 a 150 graus
+        angulo_sensor = constrain(angulo_sensor, 0, 150);
+        // =================================================================
+
+        // Mapeamento proporcional do Servo: Sensor (0 a 150°) -> Servo (0 a 90°)
+        int angulo_servo = map(angulo_sensor, 0, 150, 0, 90);
+        angulo_servo = constrain(angulo_servo, 0, 90);
+
+        // Envia o comando de movimento para a GPIO 15 do Servo
+        servo_set_angle(angulo_servo);
+
+        // Monitor Serial (Para depuração em tempo real no terminal do PC)
+        printf("ADC=%d  |  Sensor=%d deg  |  Servo=%d deg\n",
+               adc_value,
+               angulo_sensor,
+               angulo_servo);
+
+        // Formatação das strings para o Display LCD 16x2
+        char linha1[17];
+        char linha2[17];
+
+        // Os espaços vazios no fim servem para limpar resquícios de caracteres passados
+        snprintf(linha1, sizeof(linha1), "Flex: %d deg     ", angulo_sensor);
+        snprintf(linha2, sizeof(linha2), "Servo: %d deg    ", angulo_servo);
+
+        // Atualização limpa da tela do LCD
+        lcd_clear();
+        
+        lcd_set_cursor(0,0);
+        lcd_string(linha1);
+
+        lcd_set_cursor(1,0);
+        lcd_string(linha2);
+
+        // Delay estável de 50ms para garantir fluidez na resposta e evitar oscilação excessiva do LCD
+        sleep_ms(50);
+    }
+
+    return 0;
+}
