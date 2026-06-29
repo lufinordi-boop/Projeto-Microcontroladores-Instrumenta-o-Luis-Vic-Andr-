@@ -1,0 +1,68 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.metrics import r2_score
+
+# Dados experimentais
+angulo = np.array([0, 15, 30, 45, 60, 75, 90, 110, 120, 150])
+vout_med = np.array([3.05, 3.045, 3.03, 3.00, 2.96, 2.95, 2.94, 2.925, 2.88, 2.69])
+
+# Ajuste quadrático
+coef = np.polyfit(angulo, vout_med, 2)
+a, b, c = coef
+
+# Valores ajustados
+vout_fit = np.polyval(coef, angulo)
+
+# R²
+r2 = r2_score(vout_med, vout_fit)
+
+# Curva suave para plotagem
+x_fit = np.linspace(0, 150, 500)
+y_fit = np.polyval(coef, x_fit)
+
+# Equação formatada
+eq = f"V = {a:.3e}θ² + {b:.3e}θ + {c:.4f}"
+
+# Gráfico
+plt.figure(figsize=(9,6))
+
+# Dados experimentais
+plt.plot(
+    angulo,
+    vout_med,
+    'o',
+    markersize=8,
+    label='Dados Experimentais'
+)
+
+# Ajuste quadrático
+plt.plot(
+    x_fit,
+    y_fit,
+    linewidth=2,
+    label='Ajuste Quadrático'
+)
+
+plt.title('Curva de Caracterização Experimental — Flex Sensor', fontsize=14)
+plt.xlabel('Ângulo (°)', fontsize=12)
+plt.ylabel('Tensão GP26 (V)', fontsize=12)
+plt.grid(True, linestyle='--', alpha=0.6)
+
+# Exibir equação e R² no gráfico
+plt.text(
+    0.05,
+    0.15,
+    f'{eq}\nR² = {r2:.5f}',
+    transform=plt.gca().transAxes,
+    fontsize=10,
+    bbox=dict(facecolor='white', alpha=0.8)
+)
+
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+# Impressão no terminal
+print("\nEquação Quadrática:")
+print(f"V = {a:.8e}*θ² + {b:.8e}*θ + {c:.8f}")
+print(f"R² = {r2:.6f}")
